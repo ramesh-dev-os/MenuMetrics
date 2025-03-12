@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import MultiFactorAuth from './pages/MultiFactorAuth'
 import LandingPage from './pages/LandingPage'
+import UserprofilePage from './pages/UserprofilePage'
 
 const App = () => {
   return (
@@ -15,6 +16,7 @@ const App = () => {
             <Route path='/2fa' element={<MultiFactorAuth />} />
             {/* User Routes */}
             <Route path='/home' element={<LandingPage />} />
+            <Route path='/userprofile' element={<UserprofilePage />} />
             {/* Admin Routes */}
         </Routes>
     </div>
