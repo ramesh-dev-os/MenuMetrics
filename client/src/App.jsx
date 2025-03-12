@@ -5,6 +5,7 @@ import RegisterPage from './pages/RegisterPage'
 import MultiFactorAuth from './pages/MultiFactorAuth'
 import LandingPage from './pages/LandingPage'
 import UserprofilePage from './pages/UserprofilePage'
+import Feedback from './pages/Feedback'
 
 const App = () => {
   return (
@@ -17,6 +18,7 @@ const App = () => {
             {/* User Routes */}
             <Route path='/home' element={<LandingPage />} />
             <Route path='/userprofile' element={<UserprofilePage />} />
+            <Route path='/feedback' element={<Feedback />} />
             {/* Admin Routes */}
         </Routes>
     </div>
