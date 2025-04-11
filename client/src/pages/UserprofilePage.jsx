@@ -1,589 +1,429 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useFirestore } from '../context/FirestoreContext';
+import { updateProfile } from 'firebase/auth';
+import { updateUserProfile, getUserProfile } from '../firestore';
+import Navbar from '../components/Navbar';
 
 const UserprofilePage = () => {
+  const { currentUser, logout } = useAuth();
+  const { userProfile, refreshData } = useFirestore();
+  const navigate = useNavigate();
+  
   const [isEditing, setIsEditing] = useState(false);
-  const [activeSection, setActiveSection] = useState('personal');
-  const [userData, setUserData] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@restaurant.com',
-    phone: '(555) 123-4567',
-    position: 'Executive Chef',
-    restaurant: 'Coastal Cuisine',
-    bio: 'Award-winning chef with 15+ years of experience in fine dining.',
-    address: '123 Culinary Blvd, Foodie City, FC 98765',
-    website: 'www.coastalcuisine.com',
-    instagram: '@coastalchef',
-    specialties: 'Seafood, Farm-to-Table, Mediterranean',
-    yearsExperience: 15,
-    awards: 'James Beard Rising Star Chef 2022',
-    preferences: {
-      darkMode: false,
-      emailNotifications: true,
-      smsNotifications: false,
-      weeklyReports: true
-    }
+  const [formData, setFormData] = useState({
+    displayName: '',
+    email: '',
+    restaurantName: '',
+    phoneNumber: '',
+    address: '',
+    bio: ''
   });
-
-  const [skills, setSkills] = useState([
-    { name: 'Menu Development', level: 95 },
-    { name: 'Inventory Management', level: 85 },
-    { name: 'Staff Training', level: 90 },
-    { name: 'Cost Control', level: 88 },
-    { name: 'Plating & Presentation', level: 92 }
-  ]);
-
-  const [achievements, setAchievements] = useState([
-    { year: '2022', title: 'James Beard Rising Star Chef' },
-    { year: '2021', title: 'Featured in Food & Wine Magazine' },
-    { year: '2020', title: '30 Under 30 Culinary Innovators' },
-    { year: '2019', title: 'Regional Seafood Competition Winner' }
-  ]);
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    
-    if (name.startsWith('preferences.')) {
-      const prefName = name.split('.')[1];
-      setUserData({
-        ...userData,
-        preferences: {
-          ...userData.preferences,
-          [prefName]: type === 'checkbox' ? checked : value
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // Load user profile data
+  useEffect(() => {
+    const initializeForm = async () => {
+      try {
+        setIsLoading(true);
+        
+        // If we have the user profile in context, use it
+        if (userProfile) {
+          setFormData({
+            displayName: currentUser?.displayName || '',
+            email: currentUser?.email || '',
+            restaurantName: userProfile.restaurantName || '',
+            phoneNumber: userProfile.phoneNumber || '',
+            address: userProfile.address || '',
+            bio: userProfile.bio || ''
+          });
+        } else if (currentUser) {
+          // Otherwise fetch it from Firestore
+          const profile = await getUserProfile(currentUser.uid);
+          
+          setFormData({
+            displayName: currentUser.displayName || '',
+            email: currentUser.email || '',
+            restaurantName: profile?.restaurantName || '',
+            phoneNumber: profile?.phoneNumber || '',
+            address: profile?.address || '',
+            bio: profile?.bio || ''
+          });
         }
-      });
-    } else {
-      setUserData({
-        ...userData,
-        [name]: value
-      });
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Error loading user profile:", err);
+        setError("Failed to load profile information. Please try again.");
+        setIsLoading(false);
+      }
+    };
+    
+    initializeForm();
+  }, [currentUser, userProfile]);
+  
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+    
+    try {
+      // Update display name in Firebase Auth
+      if (currentUser) {
+        await updateProfile(currentUser, {
+          displayName: formData.displayName
+        });
+        
+        // Update additional profile data in Firestore
+        const profileData = {
+          name: formData.displayName,
+          restaurantName: formData.restaurantName,
+          phoneNumber: formData.phoneNumber,
+          address: formData.address,
+          bio: formData.bio,
+          updatedAt: new Date()
+        };
+        
+        await updateUserProfile(currentUser.uid, profileData);
+        
+        // Refresh data in context
+        refreshData();
+        
+        setSuccessMessage('Profile updated successfully');
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      setError('Failed to update profile. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Saving profile:', userData);
-    setIsEditing(false);
+  
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error("Failed to log out", error);
+      setError('Failed to log out');
+    }
   };
+  
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="bg-white shadow rounded-lg p-8 max-w-md w-full">
+          <div className="text-center">
+            <svg className="h-12 w-12 text-red-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h2 className="mt-2 text-xl font-semibold text-gray-900">Authentication Required</h2>
+            <p className="mt-2 text-gray-600">Please log in to view your profile</p>
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => navigate('/')}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      
       <header className="bg-white shadow">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="h-10 w-10 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 flex items-center justify-center mr-3">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-800">MenuMetrics</h1>
-          </div>
-          <nav className="hidden md:flex space-x-8">
-            <a href="#" className="text-gray-600 hover:text-green-600">Dashboard</a>
-            <a href="#" className="text-gray-600 hover:text-green-600">Analytics</a>
-            <a href="#" className="text-gray-600 hover:text-green-600">Menu</a>
-            <a href="#" className="text-green-600 font-medium">Profile</a>
-          </nav>
-          <div className="flex items-center space-x-4">
-            <button className="text-gray-500 hover:text-gray-700">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-              <span className="text-sm font-medium text-green-700">{userData.firstName.charAt(0)}{userData.lastName.charAt(0)}</span>
-            </div>
-          </div>
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
         </div>
       </header>
-
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-10">
-        {/* Profile Header Card */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-          <div className="h-40 bg-gradient-to-r from-green-500 to-emerald-600 relative"></div>
-          <div className="px-6 sm:px-10 pb-10 pt-0 relative">
-            <div className="flex flex-col sm:flex-row -mt-20 mb-6 items-end sm:items-center">
-              <img
-                src="/api/placeholder/150/150"
-                alt="Profile"
-                className="h-32 w-32 rounded-xl border-4 border-white object-cover shadow-md"
-              />
-              <div className="sm:ml-6 mt-4 sm:mt-0 text-center sm:text-left flex-grow">
-                <h2 className="text-3xl font-bold text-gray-900">{userData.firstName} {userData.lastName}</h2>
-                <p className="text-lg text-gray-600">{userData.position} at {userData.restaurant}</p>
-              </div>
-              {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="mt-4 sm:mt-0 bg-green-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-green-700 transition shadow-sm flex items-center"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                  </svg>
-                  Edit Profile
-                </button>
-              ) : (
-                <div className="flex space-x-3 mt-4 sm:mt-0">
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition shadow-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    className="bg-green-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-green-700 transition shadow-sm"
-                  >
-                    Save Changes
-                  </button>
+      
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            {/* Profile Header */}
+            <div className="px-4 py-5 sm:px-6 bg-gray-50">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-16 w-16 rounded-full bg-green-100 flex items-center justify-center text-2xl font-medium text-green-800">
+                  {currentUser && formData.displayName
+                    ? formData.displayName.charAt(0).toUpperCase()
+                    : currentUser && currentUser.email
+                    ? currentUser.email.charAt(0).toUpperCase()
+                    : 'U'}
                 </div>
-              )}
+                <div className="ml-4 flex-1">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    {formData.displayName || 'User'}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {currentUser?.email}
+                  </p>
+                </div>
+                <div>
+                  {!isEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    >
+                      <svg className="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                      Edit Profile
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
             
-            {/* Profile stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-6">
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <span className="block text-2xl font-bold text-green-600">{userData.yearsExperience}</span>
-                <span className="text-gray-600">Years Experience</span>
+            {/* Error and Success Messages */}
+            {error && (
+              <div className="mt-4 mx-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <span className="block sm:inline">{error}</span>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <span className="block text-2xl font-bold text-green-600">93%</span>
-                <span className="text-gray-600">Menu Efficiency</span>
+            )}
+            
+            {successMessage && (
+              <div className="mt-4 mx-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+                <span className="block sm:inline">{successMessage}</span>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <span className="block text-2xl font-bold text-green-600">18%</span>
-                <span className="text-gray-600">Waste Reduction</span>
+            )}
+            
+            {/* Loading Indicator */}
+            {isLoading && (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <span className="block text-2xl font-bold text-green-600">4.8</span>
-                <span className="text-gray-600">Rating</span>
+            )}
+            
+            {/* Profile Form */}
+            {!isLoading && (
+              <div className="border-t border-gray-200">
+                <form onSubmit={handleSubmit}>
+                  <dl>
+                    {/* Display Name */}
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Full name
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            name="displayName"
+                            id="displayName"
+                            value={formData.displayName}
+                            onChange={handleChange}
+                            className="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        ) : (
+                          formData.displayName || 'Not set'
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Email Address */}
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Email address
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {formData.email}
+                        {isEditing && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Email address cannot be changed after account creation.
+                          </p>
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Restaurant Name */}
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Restaurant name
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            name="restaurantName"
+                            id="restaurantName"
+                            value={formData.restaurantName}
+                            onChange={handleChange}
+                            className="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        ) : (
+                          formData.restaurantName || 'Not set'
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Phone Number */}
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Phone number
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {isEditing ? (
+                          <input
+                            type="tel"
+                            name="phoneNumber"
+                            id="phoneNumber"
+                            value={formData.phoneNumber}
+                            onChange={handleChange}
+                            className="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        ) : (
+                          formData.phoneNumber || 'Not set'
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Address */}
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Address
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            name="address"
+                            id="address"
+                            value={formData.address}
+                            onChange={handleChange}
+                            className="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        ) : (
+                          formData.address || 'Not set'
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Bio */}
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        About
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {isEditing ? (
+                          <textarea
+                            name="bio"
+                            id="bio"
+                            rows={3}
+                            value={formData.bio}
+                            onChange={handleChange}
+                            className="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        ) : (
+                          formData.bio || 'No bio provided'
+                        )}
+                      </dd>
+                    </div>
+                    
+                    {/* Subscription */}
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">
+                        Subscription plan
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Premium
+                        </span>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Your subscription renews on May 1, 2025
+                        </p>
+                      </dd>
+                    </div>
+                    
+                    {/* Submit Button (only when editing) */}
+                    {isEditing && (
+                      <div className="bg-gray-50 px-4 py-5 sm:px-6 flex justify-end">
+                        <button
+                          type="submit"
+                          className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : null}
+                          {isLoading ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
+                    )}
+                  </dl>
+                </form>
+              </div>
+            )}
+            
+            {/* Security Section */}
+            <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Security
+              </h3>
+            </div>
+            
+            <div className="border-t border-gray-200">
+              <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                <dt className="text-sm font-medium text-gray-500">
+                  Password
+                </dt>
+                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 flex justify-between items-center">
+                  <span>••••••••</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Change Password
+                  </button>
+                </dd>
               </div>
             </div>
             
-            {/* Bio */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">About</h3>
-              <p className="text-gray-600">
-                {userData.bio}
-              </p>
+            {/* Logout Button */}
+            <div className="px-4 py-5 sm:px-6 border-t border-gray-200 flex justify-end">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <svg className="-ml-1 mr-2 h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5.707-5.707A1 1 0 009.586 1H3zm0 2h6v4H3V5zm16 9v-1h-4v3h-2v-3H7v1H5v-3a2 2 0 012-2h3V6.414l4.293 4.293A1 1 0 0115 11v3h4z" clipRule="evenodd" />
+                </svg>
+                Sign Out
+              </button>
             </div>
           </div>
-        </div>
-        
-        {/* Section Navigation */}
-        <div className="border-b border-gray-200 mb-8">
-          <nav className="flex space-x-8">
-            <button 
-              onClick={() => setActiveSection('personal')}
-              className={`py-4 px-1 font-medium text-sm border-b-2 ${
-                activeSection === 'personal' 
-                  ? 'border-green-500 text-green-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Personal Information
-            </button>
-            <button 
-              onClick={() => setActiveSection('professional')}
-              className={`py-4 px-1 font-medium text-sm border-b-2 ${
-                activeSection === 'professional' 
-                  ? 'border-green-500 text-green-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Professional Skills
-            </button>
-            <button 
-              onClick={() => setActiveSection('achievements')}
-              className={`py-4 px-1 font-medium text-sm border-b-2 ${
-                activeSection === 'achievements' 
-                  ? 'border-green-500 text-green-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Achievements
-            </button>
-            <button 
-              onClick={() => setActiveSection('preferences')}
-              className={`py-4 px-1 font-medium text-sm border-b-2 ${
-                activeSection === 'preferences' 
-                  ? 'border-green-500 text-green-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Preferences
-            </button>
-          </nav>
-        </div>
-        
-        {/* Section Content */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden p-6 sm:p-8">
-          <form onSubmit={handleSubmit}>
-            {/* Personal Information */}
-            {activeSection === 'personal' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Personal Information</h3>
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                      First name
-                    </label>
-                    <input
-                      type="text"
-                      name="firstName"
-                      id="firstName"
-                      disabled={!isEditing}
-                      value={userData.firstName}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                      Last name
-                    </label>
-                    <input
-                      type="text"
-                      name="lastName"
-                      id="lastName"
-                      disabled={!isEditing}
-                      value={userData.lastName}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      id="email"
-                      disabled={!isEditing}
-                      value={userData.email}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone
-                    </label>
-                    <input
-                      type="text"
-                      name="phone"
-                      id="phone"
-                      disabled={!isEditing}
-                      value={userData.phone}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">
-                      Position
-                    </label>
-                    <input
-                      type="text"
-                      name="position"
-                      id="position"
-                      disabled={!isEditing}
-                      value={userData.position}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="restaurant" className="block text-sm font-medium text-gray-700 mb-1">
-                      Restaurant
-                    </label>
-                    <input
-                      type="text"
-                      name="restaurant"
-                      id="restaurant"
-                      disabled={!isEditing}
-                      value={userData.restaurant}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                      Address
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      id="address"
-                      disabled={!isEditing}
-                      value={userData.address}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
-                      Website
-                    </label>
-                    <input
-                      type="text"
-                      name="website"
-                      id="website"
-                      disabled={!isEditing}
-                      value={userData.website}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="instagram" className="block text-sm font-medium text-gray-700 mb-1">
-                      Instagram
-                    </label>
-                    <input
-                      type="text"
-                      name="instagram"
-                      id="instagram"
-                      disabled={!isEditing}
-                      value={userData.instagram}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="specialties" className="block text-sm font-medium text-gray-700 mb-1">
-                      Specialties
-                    </label>
-                    <input
-                      type="text"
-                      name="specialties"
-                      id="specialties"
-                      disabled={!isEditing}
-                      value={userData.specialties}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
-                      Bio
-                    </label>
-                    <textarea
-                      id="bio"
-                      name="bio"
-                      rows={4}
-                      disabled={!isEditing}
-                      value={userData.bio}
-                      onChange={handleChange}
-                      className={`block w-full rounded-lg ${
-                        isEditing ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'
-                      } shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm px-4 py-3`}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Professional Skills */}
-            {activeSection === 'professional' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Professional Skills</h3>
-                
-                <div className="space-y-6">
-                  {skills.map((skill, index) => (
-                    <div key={index}>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium text-gray-700">{skill.name}</span>
-                        <span className="text-sm font-medium text-gray-700">{skill.level}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div 
-                          className="bg-green-600 h-2.5 rounded-full" 
-                          style={{ width: `${skill.level}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {isEditing && (
-                    <button
-                      type="button"
-                      className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    >
-                      <svg className="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                      </svg>
-                      Add New Skill
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Achievements */}
-            {activeSection === 'achievements' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Achievements & Awards</h3>
-                
-                <div className="relative pl-8 border-l-2 border-green-200 space-y-10">
-                  {achievements.map((achievement, index) => (
-                    <div key={index} className="relative">
-                      <div className="absolute -left-10 top-0 h-6 w-6 rounded-full bg-green-500 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900">{achievement.title}</h4>
-                        <p className="text-green-600 font-medium">{achievement.year}</p>
-                        {isEditing && (
-                          <button type="button" className="text-red-500 text-sm hover:text-red-700 mt-1">
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {isEditing && (
-                    <button
-                      type="button"
-                      className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    >
-                      <svg className="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                      </svg>
-                      Add New Achievement
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Preferences */}
-            {activeSection === 'preferences' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Preferences</h3>
-                
-                <div className="space-y-6">
-                  <div className="flex items-start">
-                    <div className="flex items-center h-5">
-                      <input
-                        id="darkMode"
-                        name="preferences.darkMode"
-                        type="checkbox"
-                        disabled={!isEditing}
-                        checked={userData.preferences.darkMode}
-                        onChange={handleChange}
-                        className="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="darkMode" className="font-medium text-gray-700">Dark Mode</label>
-                      <p className="text-gray-500">Use dark theme for the application</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <div className="flex items-center h-5">
-                      <input
-                        id="emailNotif"
-                        name="preferences.emailNotifications"
-                        type="checkbox"
-                        disabled={!isEditing}
-                        checked={userData.preferences.emailNotifications}
-                        onChange={handleChange}
-                        className="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="emailNotif" className="font-medium text-gray-700">Email Notifications</label>
-                      <p className="text-gray-500">Receive updates and alerts via email</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <div className="flex items-center h-5">
-                      <input
-                        id="smsNotif"
-                        name="preferences.smsNotifications"
-                        type="checkbox"
-                        disabled={!isEditing}
-                        checked={userData.preferences.smsNotifications}
-                        onChange={handleChange}
-                        className="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="smsNotif" className="font-medium text-gray-700">SMS Notifications</label>
-                      <p className="text-gray-500">Receive time-sensitive alerts via text message</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <div className="flex items-center h-5">
-                      <input
-                        id="weeklyReports"
-                        name="preferences.weeklyReports"
-                        type="checkbox"
-                        disabled={!isEditing}
-                        checked={userData.preferences.weeklyReports}
-                        onChange={handleChange}
-                        className="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="weeklyReports" className="font-medium text-gray-700">Weekly Reports</label>
-                      <p className="text-gray-500">Receive weekly performance and analytics reports</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-8 pt-6 border-t border-gray-200">
-                    <button
-                      type="button"
-                      className="text-red-600 font-medium hover:text-red-800"
-                      disabled={!isEditing}
-                    >
-                      Delete Account
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </form>
         </div>
       </main>
     </div>
