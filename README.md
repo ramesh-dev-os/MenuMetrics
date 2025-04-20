@@ -1,44 +1,12 @@
-# MenuMetrics 🍽️
+# React + Vite
 
-> An intelligent restaurant menu analytics platform that optimizes performance and reduces food waste through data-driven insights.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-[![Menu Metrics](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+Currently, two official plugins are available:
 
-## Overview
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-MenuMetrics revolutionizes restaurant menu management by transforming operational data into actionable insights. Our platform bridges the gap between restaurant operations and strategic decision-making, helping establishments reduce food waste (currently 30-40% industry-wide) while maximizing profitability.
+## Expanding the ESLint configuration
 
-### Key Benefits
-
-- **Reduce Food Waste** - Track and optimize portion sizes through AI-driven recommendations
-- **Increase Profitability** - Balance pricing and portions using real-time analytics
-- **Data-Driven Decisions** - Make informed menu changes based on comprehensive performance metrics
-- **Role-Based Access** - Separate interfaces for managers and staff ensure appropriate functionality
-
-## Features
-
-### 🎯 Menu Performance Dashboard
-- Real-time sales metrics visualization
-- Interactive popularity charts
-- Waste tracking indicators
-- Profit margin analysis by category
-- Customizable date ranges
-
-### ♻️ Waste Management System
-- Digital waste logging
-- Categorized tracking (prep, plate, spoilage)
-- Automated anomaly alerts
-- Goal setting and monitoring
-
-### 💰 Profit-Waste Balancer
-- AI-powered portion optimization
-- Dynamic pricing recommendations
-- Waste prediction modeling
-- Menu item profitability scoring
-- Smart alerts system
-
-### 🔐 Authentication & Security
-- Role-based access control
-- Two-factor authentication
-- Secure password recovery
-- Profile management
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
